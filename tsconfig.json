@@ -6,7 +6,7 @@
 			"ES2019",
 			"DOM"
 		],
-		"sourceMap": true,                     /* Generates corresponding '.map' file. */
+		"sourceMap": false,                     /* Generates corresponding '.map' file. */
 		"outDir": "./build", /* Redirect output structure to the directory. */
 		"removeComments": true,                /* Do not emit comments to output. */
 

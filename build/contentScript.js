@@ -1,87 +1,99 @@
 "use strict";
-const socket = new WebSocket('ws://localhost:1987');
-let isMuted = false;
-let muteButton = null;
-socket.addEventListener('open', () => {
+connect();
+function connect() {
+    const socket = new WebSocket('ws://localhost:1987');
+    socket.onopen = () => {
+        console.log('connected');
+        runPlugin(socket);
+    };
+    socket.onclose = () => {
+        console.log('disconnected');
+        setTimeout(() => connect(), 1000);
+    };
+}
+function runPlugin(socket) {
+    let isMuted = false;
+    let muteButton = null;
+    var extensionPort = chrome.runtime.connect({ name: 'live-meeting' });
     sendIdentification();
     sendMuteState();
-});
-socket.addEventListener('message', function (event) {
-    var message = JSON.parse(event.data);
-    if (message.type === 'action') {
-        if (message.value === 'mute') {
-            mute();
+    socket.addEventListener('message', function (event) {
+        var message = JSON.parse(event.data);
+        if (message.type === 'action') {
+            if (message.value === 'mute') {
+                mute();
+            }
+            else if (message.value === 'unmute') {
+                unmute();
+            }
+            else if (message.value === 'togglemute') {
+                toggleMute();
+            }
+            else {
+                console.log('Dont know this action: ' + message.value);
+            }
         }
-        else if (message.value === 'unmute') {
-            unmute();
+    });
+    function toggleMute() {
+        let muteButton = document.querySelector('[data-tooltip="Turn off microphone (⌘ + D)"]');
+        let unmuteButton = document.querySelector('[data-tooltip="Turn on microphone (⌘ + D)"]');
+        if (muteButton) {
+            muteButton.click();
         }
-        else if (message.value === 'togglemute') {
-            toggleMute();
+        else if (unmuteButton) {
+            unmuteButton.click();
         }
         else {
-            console.log('Dont know this action: ' + message.value);
+            throw Error('No mute or unmute button found');
         }
     }
-});
-function toggleMute() {
-    let muteButton = document.querySelector('[data-tooltip="Turn off microphone (⌘ + D)"]');
-    let unmuteButton = document.querySelector('[data-tooltip="Turn on microphone (⌘ + D)"]');
-    if (muteButton) {
-        muteButton.click();
-    }
-    else if (unmuteButton) {
-        unmuteButton.click();
-    }
-    else {
-        throw Error('No mute or unmute button found');
-    }
-}
-function unmute() {
-    let unmuteButton = document.querySelector('[data-tooltip="Turn on microphone (⌘ + D)"]');
-    if (unmuteButton) {
-        unmuteButton.click();
-    }
-}
-function mute() {
-    let muteButton = document.querySelector('[data-tooltip="Turn off microphone (⌘ + D)"]');
-    if (muteButton) {
-        muteButton.click();
-    }
-}
-function updateMuteState() {
-    if (muteButton) {
-        if (isMuted !== Boolean(muteButton.getAttribute("data-is-muted") === 'true')) {
-            isMuted = Boolean(muteButton.getAttribute("data-is-muted") === 'true');
-            sendMuteState();
+    function unmute() {
+        let unmuteButton = document.querySelector('[data-tooltip="Turn on microphone (⌘ + D)"]');
+        if (unmuteButton) {
+            unmuteButton.click();
         }
     }
-}
-function observeMuteStateChange() {
-    muteButton = document.querySelectorAll("[data-tooltip][data-is-muted]")[0];
-    if (muteButton) {
-        clearInterval(findMuteButton);
-        let observer = new MutationObserver(updateMuteState);
-        observer.observe(muteButton, {
-            childList: false,
-            attributes: true,
-            attributeFilter: ['data-is-muted'],
-            subtree: false
-        });
+    function mute() {
+        let muteButton = document.querySelector('[data-tooltip="Turn off microphone (⌘ + D)"]');
+        if (muteButton) {
+            muteButton.click();
+        }
+    }
+    function updateMuteState() {
+        if (muteButton) {
+            if (isMuted !== Boolean(muteButton.getAttribute('data-is-muted') === 'true')) {
+                isMuted = Boolean(muteButton.getAttribute('data-is-muted') === 'true');
+                sendMuteState();
+            }
+        }
+    }
+    function observeMuteStateChange() {
+        muteButton = document.querySelectorAll('[data-tooltip][data-is-muted]')[0];
+        if (muteButton) {
+            clearInterval(findMuteButton);
+            let observer = new MutationObserver(updateMuteState);
+            observer.observe(muteButton, {
+                childList: false,
+                attributes: true,
+                attributeFilter: ['data-is-muted'],
+                subtree: false,
+            });
+        }
+    }
+    let findMuteButton = window.setInterval(observeMuteStateChange, 250);
+    function sendMuteState() {
+        const message = {
+            type: 'muteState',
+            value: isMuted ? 'muted' : 'unmuted',
+        };
+        socket.send(JSON.stringify(message));
+        extensionPort.postMessage({ isMuted: !!isMuted });
+    }
+    function sendIdentification() {
+        var identify = {
+            type: 'identify',
+            value: 'iamameet',
+        };
+        socket.send(JSON.stringify(identify));
     }
 }
-let findMuteButton = window.setInterval(observeMuteStateChange, 250);
-function sendMuteState() {
-    const message = {
-        'type': 'muteState',
-        'value': isMuted ? 'muted' : 'unmuted'
-    };
-    socket.send(JSON.stringify(message));
-}
-function sendIdentification() {
-    var identify = {
-        'type': 'identify',
-        'value': 'iamameet'
-    };
-    socket.send(JSON.stringify(identify));
-}
-//# sourceMappingURL=contentScript.js.map
